@@ -1,18 +1,16 @@
 # Extracting Search Trees from LLM Reasoning Traces Reveals Myopic Planning
 
-This repository contains code and data for the paper *Extracting Search Trees from LLM Reasoning Traces Reveals Myopic Planning*. We study how 27 LLMs perform game-tree search when playing Four-in-a-Row, by extracting explicit move trees from their reasoning traces and fitting parametric cognitive models to their move choices.
+This repository contains code and data for the paper *Extracting Search Trees from LLM Reasoning Traces Reveals Myopic Planning*. We study how 27 LLMs perform game-tree search when playing Four-in-a-row, by extracting explicit move trees from their reasoning traces and fitting parametric cognitive models to their move choices.
 
 ## Overview
 
-**Core question:** Do LLMs that produce long reasoning traces actually use deep tree search, or do they make decisions based on shallow, myopic heuristics?
+**Core question:** Do LLMs perform tree search through chain-of-thought reasoning, or do they make decisions based on shallow, myopic heuristics?
 
-**Approach:** We collect reasoning traces from 27 LLMs playing Four-in-a-Row (a 4×9 board game), extract the search trees they reason about, and fit a minimax-based cognitive model to predict their move choices. We compare a full-tree (minimax backpropagation) variant against a myopic (depth-1 heuristic) variant, and run causal intervention experiments to test which parts of the trace drive moves.
+**Approach:** We collect reasoning traces from 27 LLMs playing Four-in-a-row (a 4×9 board game), extract the search trees they reason about, and fit a computational model to predict their move choices. We compare a full-tree (minimax backpropagation) variant against a myopic (depth-1 heuristic) variant, and run causal intervention experiments to test which parts of the trace drive moves.
 
 **Main findings:**
-- The myopic model fits significantly better than full-tree minimax for 13/13 open-source models
-- LLM-generated candidate moves carry strong signal; replacing them with all legal moves hurts performance
-- Causal interventions show depth-1 reasoning drives move changes; deeper tree content is marginal
-- Model recovery validates that the fitting procedure identifies the true generating process
+- The myopic model fits significantly better than full-tree minimax
+- LLM-generated candidate moves carry predictive information; replacing them with all legal moves hurts performance
 
 ## Repository Structure
 
@@ -21,15 +19,13 @@ This repository contains code and data for the paper *Extracting Search Trees fr
 ├── extract_search_trees.ipynb        # Step 1: extract trees from reasoning traces via GPT-5
 ├── preprocess_dataframe.ipynb        # Step 2: augment dataframe with outcomes and metadata
 │
-├── run_cv.py / run_cv.sh             # Step 3a: k-fold cross-validation fits (SLURM array)
-├── run_full.py / run_full.sh         # Step 3b: full-dataset fits (SLURM array)
-├── run_myopic.sh                     # Step 3c: myopic baseline fits
-├── run_notree.sh                     # Step 3d: no-tree baseline fits
-├── run_gamma.sh                      # Step 3e: gamma-discounted fits
+├── run_full.py / run_full.sh         # Step 3a: full-tree model fits (SLURM array)
+├── run_myopic.sh                     # Step 3b: myopic baseline fits
+├── run_notree.sh                     # Step 3c: no-tree baseline fits
+├── run_gamma.sh                      # Step 3d: gamma-discounted fits
 │
 ├── run_model_recovery.py             # Step 4: model recovery validation
 ├── run_model_recovery.sh             # SLURM launcher for step 4
-├── synthetic_recovery.py             # Single-model synthetic recovery test
 │
 ├── intervention_label.py             # Step 5a: label reasoning paragraphs via Claude API
 ├── intervention_edit.py              # Step 5b: apply surgical edits to traces
@@ -60,8 +56,9 @@ This repository contains code and data for the paper *Extracting Search Trees fr
 │   ├── fit_results_full_<model>_notree.json  # No-tree baseline
 │   ├── fit_results_full_<model>_gamma.json   # Gamma-discounted fit
 │   ├── recovery/                             # Model recovery results per model
-│   ├── intervention_labels_*.jsonl           # Labeled reasoning paragraphs
-│   └── intervention_edits_*.jsonl            # Edited traces (7 strategies)
+│   ├── intervention_labels_250.jsonl         # Labeled reasoning paragraphs (250 turns)
+│   ├── branch_intervention/                  # Branch/comparison intervention edits + results
+│   └── depth_intervention/                   # Depth-class intervention edits + results
 │
 ├── pyproject.toml                    # Dependencies (managed via uv)
 └── uv.lock                           # Pinned dependency lockfile
@@ -223,12 +220,20 @@ python intervention_label.py \
     --output results/intervention_labels.jsonl
 ```
 
-**5c. Generate edited traces** (7 strategies for Figure 4):
+**5c. Generate edited traces:**
 
 ```bash
+# Branch intervention (fd, fd_branch, fd_comp, fd_branch_comp, and controls)
 python intervention_edit.py \
     --labels results/intervention_labels_250.jsonl \
-    --output_dir results/figure4_intervention
+    --output_dir results/branch_intervention \
+    --intervention_type branch
+
+# Depth intervention (fd_d0only, fd_deep1plus, fd_d0_and_deep, bc_minus_*, and controls)
+python intervention_edit.py \
+    --labels results/intervention_labels_250.jsonl \
+    --output_dir results/depth_intervention \
+    --intervention_type depth
 ```
 
 **5d. Run inference with edited prefills:**
@@ -237,7 +242,7 @@ python intervention_edit.py \
 MODEL=/path/to/Qwen3-Next-80B-A3B-Thinking sbatch run_intervention.sh
 ```
 
-**Pre-computed** labels and edits are already in `results/intervention_labels_*.jsonl` and `results/intervention_edits_*.jsonl`.
+**Pre-computed** labels, edits, and inference results are already in `results/intervention_labels_250.jsonl`, `results/branch_intervention/`, and `results/depth_intervention/`.
 
 ## Analysis Notebooks
 
