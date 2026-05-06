@@ -1,0 +1,15 @@
+{
+  "model": "deepseek-reasoner",
+  "sname": "deepseek-reasoner",
+  "N": 601,
+  "sim_full": {
+    "nll_full": 1.742484480303154,
+    "nll_myopic": 1.8160961977103025,
+    "delta": 0.07361171740714861
+  },
+  "sim_myopic": {
+    "nll_full": 1.681473346045483,
+    "nll_myopic": 1.2875944863233877,
+    "delta": -0.3938788597220954
+  }
+}

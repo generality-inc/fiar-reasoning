@@ -1,0 +1,26 @@
+[project]
+name = "four-in-a-row"
+version = "0.1.0"
+description = "Four in a Row"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.40",
+    "graphviz>=0.21",
+    "ipykernel>=7.2.0",
+    "json-repair>=0.25",
+    "matplotlib>=3.8",
+    "openai>=1.0",
+    "pandas>=3.0.0",
+    "pillow>=12.1.1",
+    "scipy>=1.11",
+    "tqdm>=4.65",
+]
+
+[project.optional-dependencies]
+# Required only for run_intervention.sh (re-running the local model with edited traces).
+# These need a CUDA-capable GPU and are not available on all platforms.
+gpu = [
+    "transformers>=4.40",
+    "vllm>=0.4",
+]

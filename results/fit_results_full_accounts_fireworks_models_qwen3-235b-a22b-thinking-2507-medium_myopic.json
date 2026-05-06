@@ -1,0 +1,17 @@
+{
+  "model": "accounts/fireworks/models/qwen3-235b-a22b-thinking-2507-medium",
+  "n_samples": 604,
+  "weights": [
+    1.751184351523314,
+    0.6648317397214873,
+    0.4579563417791895,
+    3.9380511593700667,
+    30.173992182899873
+  ],
+  "C": 1.859050182941903,
+  "lam": 0.0,
+  "train_nll_per_sample": 1.137717059986292,
+  "train_nll_chance": 1177.126741990219,
+  "train_accuracy": 0.6175496688741722,
+  "train_chance_accuracy": 0.04098604521121208
+}

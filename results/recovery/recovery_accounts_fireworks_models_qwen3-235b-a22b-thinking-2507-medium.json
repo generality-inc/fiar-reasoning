@@ -1,0 +1,15 @@
+{
+  "model": "accounts/fireworks/models/qwen3-235b-a22b-thinking-2507-medium",
+  "sname": "accounts_fireworks_models_qwen3-235b-a22b-thinking-2507-medium",
+  "N": 604,
+  "sim_full": {
+    "nll_full": 1.634996014325604,
+    "nll_myopic": 1.7428544788070763,
+    "delta": 0.10785846448147231
+  },
+  "sim_myopic": {
+    "nll_full": 1.5633570213874197,
+    "nll_myopic": 1.1678822066058154,
+    "delta": -0.3954748147816044
+  }
+}

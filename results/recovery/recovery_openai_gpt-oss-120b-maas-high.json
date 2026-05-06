@@ -1,0 +1,15 @@
+{
+  "model": "openai/gpt-oss-120b-maas-high",
+  "sname": "openai_gpt-oss-120b-maas-high",
+  "N": 630,
+  "sim_full": {
+    "nll_full": 1.6560861294809814,
+    "nll_myopic": 1.8361424900073033,
+    "delta": 0.18005636052632204
+  },
+  "sim_myopic": {
+    "nll_full": 1.6830616962045482,
+    "nll_myopic": 1.3083142132634173,
+    "delta": -0.3747474829411308
+  }
+}

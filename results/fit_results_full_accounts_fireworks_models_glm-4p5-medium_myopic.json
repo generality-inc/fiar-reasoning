@@ -1,0 +1,17 @@
+{
+  "model": "accounts/fireworks/models/glm-4p5-medium",
+  "n_samples": 368,
+  "weights": [
+    0.5678462244575193,
+    0.26512340634405296,
+    0.31607816013101575,
+    1.0291432423549158,
+    4.864808775511002
+  ],
+  "C": 0.25,
+  "lam": 0.0,
+  "train_nll_per_sample": 1.3288296073644508,
+  "train_nll_chance": 535.792570710631,
+  "train_accuracy": 0.45652173913043476,
+  "train_chance_accuracy": 0.033938222772375626
+}

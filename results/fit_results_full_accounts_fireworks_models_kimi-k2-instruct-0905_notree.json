@@ -1,0 +1,17 @@
+{
+  "model": "accounts/fireworks/models/kimi-k2-instruct-0905",
+  "n_samples": 211,
+  "weights": [
+    2.3948830376010792,
+    0.6963192526168301,
+    -0.11090141316475226,
+    2.612247208481718,
+    7.032221263302083
+  ],
+  "C": 1.687387258937805,
+  "lam": 0.0,
+  "train_nll_per_sample": 1.9696995064984704,
+  "train_nll_chance": 720.759063927292,
+  "train_accuracy": 0.3933649289099526,
+  "train_chance_accuracy": 0.03327955903380792
+}

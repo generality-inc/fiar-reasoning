@@ -1,0 +1,17 @@
+{
+  "model": "accounts/fireworks/models/deepseek-r1-0528-medium",
+  "n_samples": 605,
+  "weights": [
+    -0.007993243430441142,
+    0.17108156880165637,
+    0.04683920099414787,
+    0.36208605407262817,
+    3.27465071491912
+  ],
+  "C": 2.913857721238144,
+  "lam": 0.0,
+  "train_nll_per_sample": 1.7013659886595769,
+  "train_nll_chance": 1129.2962290809057,
+  "train_accuracy": 0.36363636363636365,
+  "train_chance_accuracy": 0.04288508409486108
+}

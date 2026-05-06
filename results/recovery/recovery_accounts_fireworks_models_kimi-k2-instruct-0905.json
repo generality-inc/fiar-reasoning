@@ -1,0 +1,15 @@
+{
+  "model": "accounts/fireworks/models/kimi-k2-instruct-0905",
+  "sname": "accounts_fireworks_models_kimi-k2-instruct-0905",
+  "N": 211,
+  "sim_full": {
+    "nll_full": 0.9668847945204412,
+    "nll_myopic": 0.9787850388692707,
+    "delta": 0.011900244348829487
+  },
+  "sim_myopic": {
+    "nll_full": 0.9019351137460169,
+    "nll_myopic": 0.9154926057425574,
+    "delta": 0.01355749199654055
+  }
+}

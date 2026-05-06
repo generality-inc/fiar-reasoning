@@ -1,0 +1,15 @@
+{
+  "model": "deepseek-ai/deepseek-v3.1-maas",
+  "sname": "deepseek-ai_deepseek-v3.1-maas",
+  "N": 353,
+  "sim_full": {
+    "nll_full": 1.03130319901177,
+    "nll_myopic": 1.0377563306172812,
+    "delta": 0.006453131605511257
+  },
+  "sim_myopic": {
+    "nll_full": 1.0165806529790837,
+    "nll_myopic": 0.9746009784000033,
+    "delta": -0.041979674579080424
+  }
+}

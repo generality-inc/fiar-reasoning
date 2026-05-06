@@ -1,0 +1,15 @@
+{
+  "model": "kimi-k2-thinking",
+  "sname": "kimi-k2-thinking",
+  "N": 423,
+  "sim_full": {
+    "nll_full": 1.7424852948399245,
+    "nll_myopic": 1.8153048316208769,
+    "delta": 0.07281953678095218
+  },
+  "sim_myopic": {
+    "nll_full": 1.5823320128575784,
+    "nll_myopic": 1.3289831210481133,
+    "delta": -0.25334889180946496
+  }
+}

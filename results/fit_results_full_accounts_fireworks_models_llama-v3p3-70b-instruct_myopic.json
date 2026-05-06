@@ -1,0 +1,17 @@
+{
+  "model": "accounts/fireworks/models/llama-v3p3-70b-instruct",
+  "n_samples": 3,
+  "weights": [
+    13.484819119117484,
+    63.882463992107816,
+    -80.58932866714038,
+    -0.42652196378679,
+    2.4396989874314143
+  ],
+  "C": 1.6416604592378004,
+  "lam": 0.0,
+  "train_nll_per_sample": 1.3738210164441684e-07,
+  "train_nll_chance": 2.0794415416798357,
+  "train_accuracy": 1.0,
+  "train_chance_accuracy": 0.031387608806963646
+}

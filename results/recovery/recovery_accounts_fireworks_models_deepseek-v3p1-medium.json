@@ -1,0 +1,15 @@
+{
+  "model": "accounts/fireworks/models/deepseek-v3p1-medium",
+  "sname": "accounts_fireworks_models_deepseek-v3p1-medium",
+  "N": 629,
+  "sim_full": {
+    "nll_full": 1.5447101360007163,
+    "nll_myopic": 1.730710357723647,
+    "delta": 0.18600022172293068
+  },
+  "sim_myopic": {
+    "nll_full": 1.5629477969025571,
+    "nll_myopic": 1.2412499899558032,
+    "delta": -0.32169780694675393
+  }
+}
