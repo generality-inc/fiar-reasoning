@@ -18,54 +18,26 @@ brew install graphviz
 
 For other systems, see the [Graphviz download page](https://graphviz.org/download/).
 
-## AWS Setup
+## Data Download
 
-### 1. Install AWS CLI
-
-Follow the [official AWS CLI installation guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) to install the AWS CLI.
-
-### 2. Configure AWS IAM User
-
-Run the following command to configure your credentials:
+The raw game logs (~1.1 GB compressed, ~3.1 GB uncompressed) are hosted on OSF.
 
 ```bash
-aws configure
+# Download and extract game logs
+wget -O aws-logs.tar.gz https://osf.io/gfsa8/download
+tar -xzf aws-logs.tar.gz
+rm aws-logs.tar.gz
 ```
 
-When prompted, enter the following:
-
-| Prompt | Value |
-|--------|-------|
-| **Access Key ID** | Shared with you on Slack |
-| **Secret Access Key** | Shared with you on Slack |
-| **Default region** | `us-west-1` |
-| **Output format** | Press Enter to keep the default |
-
-### 3. Syncing with S3
-
-You have **read and write access** to the `game-arena-data` S3 bucket. Files are synced into the `aws-logs/` directory in this project.
-
-Download from S3:
-
-```bash
-aws s3 sync s3://game-arena-data/replays/ ./aws-logs/
-```
-
-Upload to S3:
-
-```bash
-aws s3 sync ./aws-logs/ s3://game-arena-data/replays/
-```
-
-### 4. S3 Bucket Structure
+This creates an `aws-logs/` directory with the following structure:
 
 ```
-replays/
-├── four_in_a_row-fen/          # FEN variant
-└── four_in_a_row-standard/     # Standard variant
+aws-logs/
+├── four_in_a_row-fen/          # FEN notation variant (used in the paper)
+└── four_in_a_row-standard/     # Standard notation variant
 ```
 
-Each variant contains **351 matchup folders** for all pairings of 27 models (27 × 26 / 2 = 351). Each matchup has **4 game folders** named by game ID — 2 games where model A is player 0 and 2 games where model B is player 0:
+Each variant contains **351 matchup folders** for all pairings of 27 models (27 × 26 / 2 = 351). Each matchup has **4 game folders** — 2 games where model A moves first and 2 where model B moves first:
 
 ```
 four_in_a_row-fen/
@@ -80,7 +52,7 @@ Each game folder contains **4 files**:
 
 | File | Description |
 |------|-------------|
-| `game_log.json` | Game event stream, metadata, and outcome of the game |
+| `game_log.json` | Game event stream, metadata, and outcome |
 | `game.log` | Debugging log |
-| `<player-0-model>(0)-log.jsonl` | Logs for player 0 |
-| `<player-1-model>(1)-log.jsonl` | Logs for player 1 |
+| `<player-0-model>(0)-log.jsonl` | Full logs for player 0 (includes reasoning traces) |
+| `<player-1-model>(1)-log.jsonl` | Full logs for player 1 (includes reasoning traces) |
