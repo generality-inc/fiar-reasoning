@@ -24,7 +24,7 @@ The raw game logs (~1.1 GB compressed, ~3.1 GB uncompressed) are hosted on OSF.
 
 ```bash
 # Download and extract game logs
-wget -O aws-logs.tar.gz https://osf.io/gfsa8/download
+wget -O aws-logs.tar.gz "https://osf.io/download/69fba9c72c2505747af2009d/?view_only=e2e531ce7af64cd5a0a9a889bd60bfc0"
 tar -xzf aws-logs.tar.gz
 rm aws-logs.tar.gz
 ```
