@@ -1,16 +1,16 @@
 # Extracting Search Trees from LLM Reasoning Traces Reveals Myopic Planning
 
-This repository contains code and data for the paper *Extracting Search Trees from LLM Reasoning Traces Reveals Myopic Planning*. We study how 27 LLMs perform game-tree search when playing Four-in-a-row, by extracting explicit move trees from their reasoning traces and fitting parametric cognitive models to their move choices.
+This repository contains code and data for the paper *Extracting Search Trees from LLM Reasoning Traces Reveals Myopic Planning*. We study how 27 LLMs perform game-tree search when playing four-in-a-row, by extracting explicit move trees from their reasoning traces and fitting parametric cognitive models to their move choices.
 
 ## Overview
 
-**Core question:** Do LLMs perform tree search through chain-of-thought reasoning, or do they make decisions based on shallow, myopic heuristics?
+**Core question:** Do LLMs perform tree search through chain-of-thought reasoning. If so, how do they use search to inform their decisions?
 
-**Approach:** We collect reasoning traces from 27 LLMs playing Four-in-a-row (a 4×9 board game), extract the search trees they reason about, and fit a computational model to predict their move choices. We compare a full-tree (minimax backpropagation) variant against a myopic (depth-1 heuristic) variant, and run causal intervention experiments to test which parts of the trace drive moves.
+**Approach:** We collect reasoning traces from 27 LLMs playing four-in-a-row (a 4×9 board game), extract the search trees from their reasoning traces, and fit computational models to predict their move choices. We compare a full-tree (minimax backpropagation) variant against a myopic (depth-1 heuristic) variant, and run causal intervention experiments to test which parts of the trace drive moves.
 
 **Main findings:**
 - The myopic model fits significantly better than full-tree minimax
-- LLM-generated candidate moves carry predictive information; replacing them with all legal moves hurts performance
+- Extracted search trees carry predictive information about move decisions
 
 ## Repository Structure
 
@@ -40,25 +40,24 @@ This repository contains code and data for the paper *Extracting Search Trees fr
 │
 ├── four_in_a_row/                    # Board game utilities and tree rendering
 │
-├── analysis_tree_search_effort.ipynb # Figure: tree size vs. win rate
-├── analysis_myopic_vs_fulltree.ipynb # Figure: myopic vs. full-tree accuracy
-├── analysis_feature_weights.ipynb    # Figure: fitted weights vs. win rate
+├── analysis_tree_search_effort.ipynb    # Figure: tree size vs. win rate
+├── analysis_myopic_vs_fulltree.ipynb    # Figure: myopic vs. full-tree accuracy
+├── analysis_feature_weights.ipynb       # Figure: fitted weights vs. win rate
 ├── analysis_fit_result_comparison.ipynb # Figure: model comparison across variants
-├── analysis_model_recovery.ipynb     # Figure: model recovery results
-├── analysis_intervention.ipynb       # Figure: intervention causal effects
+├── analysis_model_recovery.ipynb        # Figure: model recovery results
+├── analysis_intervention.ipynb          # Figure: intervention causal effects
 │
-├── game_trees_df_annotated.pkl           # Extracted and annotated search trees (all 27 models)
-├── game_trees_df_annotated_preprocessed.pkl  # Enriched with outcomes and metadata
+├── game_trees_df_annotated.pkl              # Extracted and annotated search trees (all 27 models)
+├── game_trees_df_annotated_preprocessed.pkl # Enriched with outcomes and metadata
 │
-├── results/                          # Pre-computed fit results (JSON) for all models × variants
+├── results/                                  # Pre-computed fit results (JSON) for all models × variants
 │   ├── fit_results_full_<model>.json         # Full-tree fit
 │   ├── fit_results_full_<model>_myopic.json  # Myopic baseline
 │   ├── fit_results_full_<model>_notree.json  # No-tree baseline
 │   ├── fit_results_full_<model>_gamma.json   # Gamma-discounted fit
 │   ├── recovery/                             # Model recovery results per model
 │   ├── intervention_labels_250.jsonl         # Labeled reasoning paragraphs (250 turns)
-│   ├── branch_intervention/                  # Branch/comparison intervention edits + results
-│   └── depth_intervention/                   # Depth-class intervention edits + results
+│   ├── intervention/                         # intervention edits + results
 │
 ├── pyproject.toml                    # Dependencies (managed via uv)
 └── uv.lock                           # Pinned dependency lockfile
@@ -157,19 +156,13 @@ sbatch run_notree.sh
 sbatch run_gamma.sh
 ```
 
-Cross-validation (used to select the number of optimization restarts):
-
-```bash
-sbatch run_cv.sh
-```
-
 Each job writes a JSON result to `results/fit_results_full_<model>[_variant].json`.
 
 **Pre-computed results** for all 27 models × 4 variants are already in `results/`.
 
 #### Model parameters
 
-Each variant fits up to 8 parameters via maximum-likelihood (L-BFGS-B, 20 random restarts):
+Each variant fits up to 7 parameters via maximum-likelihood (L-BFGS-B, 20 random restarts):
 
 | Parameter | Description |
 |-----------|-------------|
@@ -179,7 +172,6 @@ Each variant fits up to 8 parameters via maximum-likelihood (L-BFGS-B, 20 random
 | `w[3]` | Weight on three-in-a-row |
 | `w[4]` | Weight on four-in-a-row (terminal) |
 | `C` | Active scaling constant (own-piece salience boost) |
-| `λ` | Lapse rate (probability of random action) |
 | `γ` | Minimax continuation discount (gamma variant only; fixed to 1 in full, 0 in myopic) |
 
 ### Step 4 — Model Recovery
@@ -223,17 +215,10 @@ python intervention_label.py \
 **5c. Generate edited traces:**
 
 ```bash
-# Branch intervention (fd, fd_branch, fd_comp, fd_branch_comp, and controls)
+# interventio
 python intervention_edit.py \
     --labels results/intervention_labels_250.jsonl \
-    --output_dir results/branch_intervention \
-    --intervention_type branch
-
-# Depth intervention (fd_d0only, fd_deep1plus, fd_d0_and_deep, bc_minus_*, and controls)
-python intervention_edit.py \
-    --labels results/intervention_labels_250.jsonl \
-    --output_dir results/depth_intervention \
-    --intervention_type depth
+    --output_dir results/intervention
 ```
 
 **5d. Run inference with edited prefills:**
