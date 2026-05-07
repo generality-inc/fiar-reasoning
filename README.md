@@ -215,7 +215,6 @@ python intervention_label.py \
 **5c. Generate edited traces:**
 
 ```bash
-# interventio
 python intervention_edit.py \
     --labels results/intervention_labels_250.jsonl \
     --output_dir results/intervention
@@ -227,7 +226,7 @@ python intervention_edit.py \
 MODEL=/path/to/Qwen3-Next-80B-A3B-Thinking sbatch run_intervention.sh
 ```
 
-**Pre-computed** labels, edits, and inference results are already in `results/intervention_labels_250.jsonl`, `results/branch_intervention/`, and `results/depth_intervention/`.
+**Pre-computed** labels, edits, and inference results are already in `results/intervention_labels_250.jsonl` and `results/intervention/`.
 
 ## Analysis Notebooks
 
