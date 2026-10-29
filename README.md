@@ -6,11 +6,12 @@ This repository contains code and data for the paper *Extracting Search Trees fr
 
 **Core question:** Do LLMs perform tree search through chain-of-thought reasoning. If so, how do they use search to inform their decisions?
 
-**Approach:** We collect reasoning traces from 27 LLMs playing four-in-a-row (a 4×9 board game), extract the search trees from their reasoning traces, and fit computational models to predict their move choices. We compare a full-tree (minimax backpropagation) variant against a myopic (depth-1 heuristic) variant, and run causal intervention experiments to test which parts of the trace drive moves.
+**Approach:** We collect reasoning traces from 27 LLMs playing four-in-a-row (a 4×9 board game), extract the search trees from their reasoning traces, and fit computational models to predict their move choices. We compare a full-tree (minimax backpropagation) variant against a myopic (depth-1 heuristic) variant, and run causal intervention experiments on three open-weight reasoning models (Qwen3-Next-80B-A3B-Thinking, Qwen3-235B-A22B-Thinking-2507, Kimi-K2-Thinking) to test which parts of the trace drive moves.
 
 **Main findings:**
 - The myopic model fits significantly better than full-tree minimax
 - Extracted search trees carry predictive information about move decisions
+- In all three intervention models, removing the chosen move's branch changes the move far more often than removing an unchosen branch, and adding back only its depth-1 content nearly restores the original choice
 
 ## Repository Structure
 
@@ -29,8 +30,10 @@ This repository contains code and data for the paper *Extracting Search Trees fr
 │
 ├── intervention_label.py             # Step 5a: label reasoning paragraphs via Claude API
 ├── intervention_edit.py              # Step 5b: apply surgical edits to traces
-├── intervention_infer.py             # Step 5c: run local model with edited prefills
-├── run_intervention.sh               # SLURM launcher for step 5c
+├── intervention_infer.py             # Step 5d: run local model with edited prefills (Qwen3-Next-80B)
+├── run_intervention.sh               # SLURM launcher for step 5d
+├── intervention_infer_api.py         # Step 5d: same, against a vLLM server (Qwen3-235B, Kimi-K2)
+├── run_intervention_api.sh           # Launcher for intervention_infer_api.py
 ├── run_download.sh                   # Download Qwen3-80B weights for intervention
 │
 ├── features.py                       # Heuristic feature computation (5 board features)
@@ -56,8 +59,10 @@ This repository contains code and data for the paper *Extracting Search Trees fr
 │   ├── fit_results_full_<model>_notree.json  # No-tree baseline
 │   ├── fit_results_full_<model>_gamma.json   # Gamma-discounted fit
 │   ├── recovery/                             # Model recovery results per model
-│   ├── intervention_labels_250.jsonl         # Labeled reasoning paragraphs (250 turns)
-│   ├── intervention/                         # intervention edits + results
+│   ├── intervention_labels_250.jsonl         # Labeled reasoning paragraphs (250 turns, Qwen3-Next-80B)
+│   ├── intervention/                         # Qwen3-Next-80B-A3B-Thinking edits + results
+│   ├── intervention_qwen3-235b-a22b-thinking/ # Qwen3-235B-A22B-Thinking-2507 labels, edits + results
+│   ├── intervention_kimi-k2-thinking/        # Kimi-K2-Thinking labels, edits + results
 │
 ├── pyproject.toml                    # Dependencies (managed via uv)
 └── uv.lock                           # Pinned dependency lockfile
@@ -188,7 +193,17 @@ python run_model_recovery.py --all
 
 ### Step 5 — Intervention Experiment
 
-The intervention experiment requires the [Qwen3-Next-80B-A3B-Thinking](https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Thinking) model weights and a CUDA-capable GPU (4× GPUs recommended). Install GPU dependencies first:
+The intervention experiment was run on three models:
+
+| Model | Weights | Results folder | Turns |
+|-------|---------|----------------|-------|
+| Qwen3-Next-80B-A3B-Thinking | [Qwen/Qwen3-Next-80B-A3B-Thinking](https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Thinking) | `results/intervention/` | 241 |
+| Qwen3-235B-A22B-Thinking-2507 | [Qwen/Qwen3-235B-A22B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507) | `results/intervention_qwen3-235b-a22b-thinking/` | 242 |
+| Kimi-K2-Thinking | [moonshotai/Kimi-K2-Thinking](https://huggingface.co/moonshotai/Kimi-K2-Thinking) | `results/intervention_kimi-k2-thinking/` | 246 |
+
+Each folder holds the edited traces (`intervention_edits_<strategy>.jsonl`) and the inference results (`intervention_results_<strategy>.csv`) for seven strategies: `fd`, `fd_branch_comp(_ctrl)`, `bc_minus_d0only(_ctrl)` and `bc_minus_d0_and_deep1plus(_ctrl)`, where `_ctrl` targets the largest unchosen branch instead of the chosen one.
+
+Qwen3-Next-80B runs on 4× GPUs; Qwen3-235B and Kimi-K2 were served with vLLM on 8× H200. Install GPU dependencies first:
 
 ```bash
 uv sync --extra gpu
@@ -226,7 +241,31 @@ python intervention_edit.py \
 MODEL=/path/to/Qwen3-Next-80B-A3B-Thinking sbatch run_intervention.sh
 ```
 
-**Pre-computed** labels, edits, and inference results are already in `results/intervention_labels_250.jsonl` and `results/intervention/`.
+**Other models.** The same steps apply to Qwen3-235B-A22B-Thinking-2507 and Kimi-K2-Thinking, with these labeling arguments:
+
+| Model | `--logs_pattern` | `--model_name` |
+|-------|------------------|----------------|
+| Qwen3-235B-A22B-Thinking-2507 | `'*qwen3-235b-a22b-thinking-2507*log.jsonl'` | `qwen3-235b-a22b-thinking` |
+| Kimi-K2-Thinking | `'*kimi-k2-thinking*log.jsonl'` | `kimi-k2-thinking` |
+
+```bash
+python intervention_label.py \
+    --trees_pkl game_trees_df_annotated_preprocessed.pkl \
+    --logs_dir aws-logs/four_in_a_row-fen/ \
+    --logs_pattern '*kimi-k2-thinking*log.jsonl' \
+    --model_name kimi-k2-thinking \
+    --max_turns 250 \
+    --output results/intervention_kimi-k2-thinking/intervention_labels_250.jsonl
+
+python intervention_edit.py \
+    --labels results/intervention_kimi-k2-thinking/intervention_labels_250.jsonl \
+    --output_dir results/intervention_kimi-k2-thinking
+
+vllm serve moonshotai/Kimi-K2-Thinking --tensor-parallel-size 8 --max-model-len 16384 --trust-remote-code
+MODEL=moonshotai/Kimi-K2-Thinking DIR=results/intervention_kimi-k2-thinking bash run_intervention_api.sh
+```
+
+**Pre-computed** labels, edits, and inference results are already in `results/intervention_labels_250.jsonl` and `results/intervention/` (Qwen3-Next-80B), `results/intervention_qwen3-235b-a22b-thinking/`, and `results/intervention_kimi-k2-thinking/`.
 
 ## Analysis Notebooks
 
@@ -239,7 +278,7 @@ All figures in the paper can be reproduced by running the analysis notebooks. No
 | `analysis_feature_weights.ipynb` | Fig. 3 | Fitted feature weights vs. model win rate |
 | `analysis_fit_result_comparison.ipynb` | Fig. S1 | NLL comparison across all four variants |
 | `analysis_model_recovery.ipynb` | Fig. S2 | Model recovery results for 13 open-source models |
-| `analysis_intervention.ipynb` | Fig. 4 | Causal intervention: which trace segments drive moves |
+| `analysis_intervention.ipynb` | Fig. 4 | Causal intervention: which trace segments drive moves (all three models in the last section) |
 
 ## Board Representation
 
