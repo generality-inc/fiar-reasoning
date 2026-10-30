@@ -1,0 +1,4 @@
+[[ ## trace ## ]]
+{trace}
+
+Respond with a JSON object in the following order of fields: trees (must be formatted as a valid Python list[list[Any]]).

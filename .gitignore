@@ -1,7 +1,10 @@
-aws-logs/
-.claude/
+data/logs
+data/judge_*.jsonl
+data/game_trees_rebuilt.pkl
+figures/
+logs/
 __pycache__/
 *.pyc
-*.pyo
 .DS_Store
 .ipynb_checkpoints/
+.venv/

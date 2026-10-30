@@ -1,7 +1,7 @@
 [project]
-name = "four-in-a-row"
-version = "0.1.0"
-description = "Four in a Row"
+name = "fiar"
+version = "1.0.0"
+description = "Extracting search trees from LLM reasoning traces in four-in-a-row"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -10,17 +10,22 @@ dependencies = [
     "ipykernel>=7.2.0",
     "json-repair>=0.25",
     "matplotlib>=3.8",
+    "numpy>=1.26",
     "openai>=1.0",
     "pandas>=3.0.0",
-    "pillow>=12.1.1",
     "scipy>=1.11",
-    "tqdm>=4.65",
 ]
 
 [project.optional-dependencies]
-# Required only for run_intervention.sh (re-running the local model with edited traces).
-# These need a CUDA-capable GPU and are not available on all platforms.
+# Re-running the intervention models with edited traces (CUDA GPUs).
 gpu = [
     "transformers>=4.40",
     "vllm>=0.4",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["fiar"]

@@ -1,291 +1,156 @@
 # Extracting Search Trees from LLM Reasoning Traces Reveals Myopic Planning
 
-This repository contains code and data for the paper *Extracting Search Trees from LLM Reasoning Traces Reveals Myopic Planning*. We study how 27 LLMs perform game-tree search when playing four-in-a-row, by extracting explicit move trees from their reasoning traces and fitting parametric cognitive models to their move choices.
+Code and data for the NeurIPS 2026 paper by Sixing Chen, Ji-An Li, Saner Cakir, Sinan Akcali, Kayla Lee and
+Marcelo G. Mattar.
 
-## Overview
-
-**Core question:** Do LLMs perform tree search through chain-of-thought reasoning. If so, how do they use search to inform their decisions?
-
-**Approach:** We collect reasoning traces from 27 LLMs playing four-in-a-row (a 4×9 board game), extract the search trees from their reasoning traces, and fit computational models to predict their move choices. We compare a full-tree (minimax backpropagation) variant against a myopic (depth-1 heuristic) variant, and run causal intervention experiments on three open-weight reasoning models (Qwen3-Next-80B-A3B-Thinking, Qwen3-235B-A22B-Thinking-2507, Kimi-K2-Thinking) to test which parts of the trace drive moves.
-
-**Main findings:**
-- The myopic model fits significantly better than full-tree minimax
-- Extracted search trees carry predictive information about move decisions
-- In all three intervention models, removing the chosen move's branch changes the move far more often than removing an unchosen branch, and adding back only its depth-1 content nearly restores the original choice
-
-## Repository Structure
-
-```
-.
-├── extract_search_trees.ipynb        # Step 1: extract trees from reasoning traces via GPT-5
-├── preprocess_dataframe.ipynb        # Step 2: augment dataframe with outcomes and metadata
-│
-├── run_full.py / run_full.sh         # Step 3a: full-tree model fits (SLURM array)
-├── run_myopic.sh                     # Step 3b: myopic baseline fits
-├── run_notree.sh                     # Step 3c: no-tree baseline fits
-├── run_gamma.sh                      # Step 3d: gamma-discounted fits
-│
-├── run_model_recovery.py             # Step 4: model recovery validation
-├── run_model_recovery.sh             # SLURM launcher for step 4
-│
-├── intervention_label.py             # Step 5a: label reasoning paragraphs via Claude API
-├── intervention_edit.py              # Step 5b: apply surgical edits to traces
-├── intervention_infer.py             # Step 5d: run local model with edited prefills (Qwen3-Next-80B)
-├── run_intervention.sh               # SLURM launcher for step 5d
-├── intervention_infer_api.py         # Step 5d: same, against a vLLM server (Qwen3-235B, Kimi-K2)
-├── run_intervention_api.sh           # Launcher for intervention_infer_api.py
-├── run_download.sh                   # Download Qwen3-80B weights for intervention
-│
-├── features.py                       # Heuristic feature computation (5 board features)
-├── preprocess.py                     # FEN parsing, board encoding, tree parsing
-├── minimax.py                        # Tree annotation and minimax/negamax evaluation
-├── fit.py                            # MLE fitting (L-BFGS-B, multi-restart)
-│
-├── four_in_a_row/                    # Board game utilities and tree rendering
-│
-├── analysis_tree_search_effort.ipynb    # Figure: tree size vs. win rate
-├── analysis_myopic_vs_fulltree.ipynb    # Figure: myopic vs. full-tree accuracy
-├── analysis_feature_weights.ipynb       # Figure: fitted weights vs. win rate
-├── analysis_fit_result_comparison.ipynb # Figure: model comparison across variants
-├── analysis_model_recovery.ipynb        # Figure: model recovery results
-├── analysis_intervention.ipynb          # Figure: intervention causal effects
-│
-├── game_trees_df_annotated.pkl              # Extracted and annotated search trees (all 27 models)
-├── game_trees_df_annotated_preprocessed.pkl # Enriched with outcomes and metadata
-│
-├── results/                                  # Pre-computed fit results (JSON) for all models × variants
-│   ├── fit_results_full_<model>.json         # Full-tree fit
-│   ├── fit_results_full_<model>_myopic.json  # Myopic baseline
-│   ├── fit_results_full_<model>_notree.json  # No-tree baseline
-│   ├── fit_results_full_<model>_gamma.json   # Gamma-discounted fit
-│   ├── recovery/                             # Model recovery results per model
-│   ├── intervention_labels_250.jsonl         # Labeled reasoning paragraphs (250 turns, Qwen3-Next-80B)
-│   ├── intervention/                         # Qwen3-Next-80B-A3B-Thinking edits + results
-│   ├── intervention_qwen3-235b-a22b-thinking/ # Qwen3-235B-A22B-Thinking-2507 labels, edits + results
-│   ├── intervention_kimi-k2-thinking/        # Kimi-K2-Thinking labels, edits + results
-│
-├── pyproject.toml                    # Dependencies (managed via uv)
-└── uv.lock                           # Pinned dependency lockfile
-```
+LLMs played a round-robin four-in-a-row tournament (27 models, 1404 games). We extract the search tree from each
+reasoning trace with an LLM judge, fit cognitive models that predict each move from its tree, and prune reasoning
+traces to test which parts of the search causally drive the move.
 
 ## Setup
 
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/) if you haven't already.
+```bash
+uv sync                    # Python 3.11 environment with the `fiar` package and all dependencies
+brew install graphviz      # or see https://graphviz.org/download/ (needed for Figure 1D)
+```
 
-Sync the environment (installs Python 3.11 and all pinned dependencies):
+All commands below are run from the repository root (prefix them with `uv run` or activate `.venv`).
+
+## Reproducing the figures
+
+Everything needed for the figures is in this repository: the per-turn dataframe `data/game_trees.pkl` and the
+precomputed results in `results/`. Run
 
 ```bash
-uv sync
+jupyter nbconvert --to notebook --execute paper_figures.ipynb   # or open it and run all cells
 ```
 
-You also need the Graphviz system binary for tree rendering. On macOS:
+`paper_figures.ipynb` writes every data panel to `figures/` and prints the statistics quoted in the text.
+
+## Data
+
+`data/game_trees.pkl` has one row per turn of the 27 models (18,888 turns). Its main columns are:
+
+| Column | Content |
+|---|---|
+| `game_path`, `turn_idx` | Game log (relative to `data/logs/four_in_a_row-fen/`) and event index |
+| `model_names` | Model, as named in the paper |
+| `board_state` | FEN and player to move, as shown to the model (missing on the empty opening board) |
+| `trees` | Extracted search tree: a list of depth-1 nodes `['r,c', child, ...]` |
+| `trees_annotated` | Same tree with illegal moves and terminal (win/loss/tie) nodes tagged |
+| `extracted_move`, `move_success` | The move played and whether it was legal |
+| `max_ply`, `n_root_moves`, `total_nodes` | Depth, breadth and size of the tree |
+| `outcome_perspective` | Game result for this model (1 win, 0.5 draw, 0 loss) |
+
+The raw game logs, including the full reasoning traces (about 2.7 GB), are on Hugging Face at
+[SixingChen01/fiar-reasoning](https://huggingface.co/datasets/SixingChen01/fiar-reasoning). They are needed only
+to rerun the extraction or the intervention:
 
 ```bash
-brew install graphviz
+hf download SixingChen01/fiar-reasoning --repo-type dataset --local-dir data/logs --include "four_in_a_row-fen/*"
 ```
 
-For other systems, see the [Graphviz download page](https://graphviz.org/download/).
+Each game folder `four_in_a_row-fen/<model-a>_vs_<model-b>/<game-id>/` holds `game_log.json` (events, reasoning
+traces and outcome), `game.log`, and one `<provider>-<model>(<player>)-log.jsonl` per player with the raw API
+requests and responses. The dataset also contains `four_in_a_row-standard/`, a tournament with a different board
+notation that is not analysed in the paper.
 
-## Data Download
+## Repository layout
 
-The raw game logs (~1.1 GB compressed, ~3.1 GB uncompressed) are hosted anonymously on OSF.
+```
+fiar/                   Python package
+  board.py              FEN and search-tree parsing
+  features.py           heuristic value functions: pattern features (main text) and window-count features (D.4)
+  minimax.py            value backup over a tree (full-tree, myopic, discount)
+  fit.py                datasets, likelihood, fitting, model variants
+  models.py             model names
+  render.py             search-tree rendering (Figure 1D)
+pipeline/
+  extract_search_trees.py   GPT-5 tree extraction and dataframe assembly (Section 2, C.2)
+  prompts/                  the extraction prompt (Appendix C.2)
+  fit_cognitive_models.py   fit one model variant to one LLM (Section 4, D.4)
+  model_recovery.py         model recovery (D.2)
+  slurm/                    array-job launchers for the two scripts above
+intervention/           causal intervention (Section 5, C.5): label.py, edit.py, infer_local.py, infer_vllm.py
+validation/
+  tree_extraction/      judge vs human search trees (C.3)
+  paragraph_labels/     paragraph labeler vs human labels (C.5.2)
+results/
+  fits/pattern/         <model>_<variant>.json for variants full, myopic, notree, gamma
+  fits/windowcount/     the same with the window-count features (D.4)
+  recovery/             <model>.json
+  intervention/<model>/ labels.jsonl, edits_<strategy>.jsonl, results_<strategy>.csv
+paper_figures.ipynb     all figures and in-text statistics
+```
+
+## Rerunning the analyses
+
+### Search-tree extraction (Section 2.2)
 
 ```bash
-wget -O aws-logs.tar.gz "https://osf.io/download/69fba9c72c2505747af2009d/?view_only=e2e531ce7af64cd5a0a9a889bd60bfc0"
-tar -xzf aws-logs.tar.gz
-rm aws-logs.tar.gz
+python pipeline/extract_search_trees.py submit    # needs OPENAI_API_KEY
+python pipeline/extract_search_trees.py fetch     # repeat until all responses are completed
+python pipeline/extract_search_trees.py build     # -> data/game_trees_rebuilt.pkl
 ```
 
-This creates an `aws-logs/` directory:
+The judge samples at temperature 1, so a rerun gives similar but not identical trees. Applied to the original judge
+outputs, `build` reproduces every column of `data/game_trees.pkl` that the analyses use (`trees_annotated` is not
+rebuilt).
 
-```
-aws-logs/
-├── four_in_a_row-fen/       # FEN notation variant (used in the paper)
-└── four_in_a_row-standard/  # Standard notation variant
-```
-
-Each variant contains **351 matchup folders** for all pairings of 27 models (27 × 26 / 2 = 351). Each matchup has **4 game folders** — 2 games where model A moves first and 2 where model B moves first:
-
-```
-four_in_a_row-fen/
-└── <model-a>_vs_<model-b>/
-    ├── batch-<id>--<timestamp>/
-    ├── batch-.../
-    ├── batch-.../
-    └── batch-.../
-```
-
-Each game folder contains **4 files**:
-
-| File | Description |
-|------|-------------|
-| `game_log.json` | Game event stream, metadata, and outcome |
-| `game.log` | Debugging log |
-| `<player-0-model>(0)-log.jsonl` | Full logs for player 0 (includes reasoning traces) |
-| `<player-1-model>(1)-log.jsonl` | Full logs for player 1 (includes reasoning traces) |
-
-## Reproducing Results
-
-The pre-computed outputs needed to run all analysis notebooks are already included in this repository (`game_trees_df_annotated_preprocessed.pkl`, `results/`). You can go directly to [Analysis Notebooks](#analysis-notebooks) to reproduce all figures.
-
-To reproduce results from scratch, follow the steps below.
-
-### Step 1 — Extract Search Trees
-
-`extract_search_trees.ipynb` parses the raw game logs and uses GPT-5 (via the OpenAI batch API and DSPy) to extract explicit move trees from each model's reasoning trace. Update the `logs_dir` variable at the top of the notebook to point to your local `aws-logs/four_in_a_row-fen/` directory and set your OpenAI API key.
-
-**Output:** `game_trees_df.pkl` — a DataFrame with one row per game turn (18,888 rows), containing the extracted tree, move, model name, and search effort metrics.
-
-### Step 2 — Preprocess
-
-`preprocess_dataframe.ipynb` cleans the raw trees, annotates each turn with game outcome (win/loss from the model's perspective), token counts, and model metadata.
-
-**Input:** `game_trees_df.pkl` + raw game logs  
-**Output:** `game_trees_df_annotated_preprocessed.pkl`
-
-### Step 3 — Fit Models
-
-We fit four model variants to each model's move choices. Each variant is a SLURM array job (one job per model, 27 models total):
-
-| Script | Variant | Description |
-|--------|---------|-------------|
-| `run_full.sh` | Full-tree | Minimax backpropagation over the full extracted tree |
-| `run_myopic.sh` | Myopic | Depth-1 heuristic evaluation of root candidates only |
-| `run_notree.sh` | No-tree | Replace LLM candidates with all legal moves |
-| `run_gamma.sh` | Gamma | Fit depth-discounting parameter γ as a free variable |
+### Cognitive models (Section 4, Appendix D.4)
 
 ```bash
-sbatch run_full.sh
-sbatch run_myopic.sh
-sbatch run_notree.sh
-sbatch run_gamma.sh
+python pipeline/fit_cognitive_models.py --model deepseek-r1 --variant myopic
+VARIANT=myopic sbatch pipeline/slurm/fit.sbatch          # all 13 fitted models
+VARIANT=gamma BASIS=windowcount sbatch pipeline/slurm/fit.sbatch
 ```
 
-Each job writes a JSON result to `results/fit_results_full_<model>[_variant].json`.
+Variants are `full`, `myopic`, `notree` and `gamma` (discount). Each fit uses L-BFGS-B with 20 random starts. With
+the window-count basis, C is fixed to 1 and the discount fit is also started from the myopic solution, so run the
+`myopic` fits first.
 
-**Pre-computed results** for all 27 models × 4 variants are already in `results/`.
-
-#### Model parameters
-
-Each variant fits up to 7 parameters via maximum-likelihood (L-BFGS-B, 20 random restarts):
-
-| Parameter | Description |
-|-----------|-------------|
-| `w[0]` | Weight on centre-proximity feature |
-| `w[1]` | Weight on connected-2 (two adjacent pieces) |
-| `w[2]` | Weight on unconnected-2 (two non-adjacent pieces) |
-| `w[3]` | Weight on three-in-a-row |
-| `w[4]` | Weight on four-in-a-row (terminal) |
-| `C` | Active scaling constant (own-piece salience boost) |
-| `γ` | Minimax continuation discount (gamma variant only; fixed to 1 in full, 0 in myopic) |
-
-### Step 4 — Model Recovery
-
-Validates that the fitting procedure identifies the true generating process by fitting both variants to synthetic data sampled from each:
+### Model recovery (Appendix D.2)
 
 ```bash
-sbatch run_model_recovery.sh
-# After all array jobs complete, aggregate:
-python run_model_recovery.py --all
+sbatch pipeline/slurm/recovery.sbatch     # needs results/fits/pattern/<model>_{full,myopic}.json
 ```
 
-**Output:** `results/recovery/recovery_<model>.json` per model, aggregated into `results/model_recovery_all.json`.
+### Causal intervention (Section 5)
 
-### Step 5 — Intervention Experiment
-
-The intervention experiment was run on three models:
-
-| Model | Weights | Results folder | Turns |
-|-------|---------|----------------|-------|
-| Qwen3-Next-80B-A3B-Thinking | [Qwen/Qwen3-Next-80B-A3B-Thinking](https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Thinking) | `results/intervention/` | 241 |
-| Qwen3-235B-A22B-Thinking-2507 | [Qwen/Qwen3-235B-A22B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507) | `results/intervention_qwen3-235b-a22b-thinking/` | 242 |
-| Kimi-K2-Thinking | [moonshotai/Kimi-K2-Thinking](https://huggingface.co/moonshotai/Kimi-K2-Thinking) | `results/intervention_kimi-k2-thinking/` | 246 |
-
-Each folder holds the edited traces (`intervention_edits_<strategy>.jsonl`) and the inference results (`intervention_results_<strategy>.csv`) for seven strategies: `fd`, `fd_branch_comp(_ctrl)`, `bc_minus_d0only(_ctrl)` and `bc_minus_d0_and_deep1plus(_ctrl)`, where `_ctrl` targets the largest unchosen branch instead of the chosen one.
-
-Qwen3-Next-80B runs on 4× GPUs; Qwen3-235B and Kimi-K2 were served with vLLM on 8× H200. Install GPU dependencies first:
+The intervention was run on Qwen3-Next-80B-A3B-Thinking, Qwen3-235B-A22B-Thinking-2507 and Kimi-K2-Thinking, on
+the first 250 eligible turns of each. Each step reads and writes `results/intervention/<model>/`.
 
 ```bash
-uv sync --extra gpu
-```
+# 1. Label paragraphs with Claude Opus 4.7 (needs ANTHROPIC_API_KEY)
+python intervention/label.py --model_name qwen3-next-80b-a3b-thinking
+# 2. Build the seven edited traces
+python intervention/edit.py --model qwen3-next-80b-a3b-thinking
+# 3. Rerun the model on the edited traces
+MODEL_DIR=/path/to/Qwen3-Next-80B-A3B-Thinking sbatch intervention/run_local.sbatch
 
-**5a. Download model weights:**
-
-```bash
-LOCAL_DIR=/path/to/Qwen3-Next-80B-A3B-Thinking
-sbatch run_download.sh  # or run manually with LOCAL_DIR set
-```
-
-**5b. Label reasoning paragraphs** (requires an Anthropic API key):
-
-```bash
-python intervention_label.py \
-    --trees_pkl game_trees_df_annotated.pkl \
-    --logs_dir aws-logs/four_in_a_row-fen/ \
-    --logs_pattern '*qwen*qwen3*next*80b*' \
-    --model_name qwen3-next-80b-a3b-thinking \
-    --output results/intervention_labels.jsonl
-```
-
-**5c. Generate edited traces:**
-
-```bash
-python intervention_edit.py \
-    --labels results/intervention_labels_250.jsonl \
-    --output_dir results/intervention
-```
-
-**5d. Run inference with edited prefills:**
-
-```bash
-MODEL=/path/to/Qwen3-Next-80B-A3B-Thinking sbatch run_intervention.sh
-```
-
-**Other models.** The same steps apply to Qwen3-235B-A22B-Thinking-2507 and Kimi-K2-Thinking, with these labeling arguments:
-
-| Model | `--logs_pattern` | `--model_name` |
-|-------|------------------|----------------|
-| Qwen3-235B-A22B-Thinking-2507 | `'*qwen3-235b-a22b-thinking-2507*log.jsonl'` | `qwen3-235b-a22b-thinking` |
-| Kimi-K2-Thinking | `'*kimi-k2-thinking*log.jsonl'` | `kimi-k2-thinking` |
-
-```bash
-python intervention_label.py \
-    --trees_pkl game_trees_df_annotated_preprocessed.pkl \
-    --logs_dir aws-logs/four_in_a_row-fen/ \
-    --logs_pattern '*kimi-k2-thinking*log.jsonl' \
-    --model_name kimi-k2-thinking \
-    --max_turns 250 \
-    --output results/intervention_kimi-k2-thinking/intervention_labels_250.jsonl
-
-python intervention_edit.py \
-    --labels results/intervention_kimi-k2-thinking/intervention_labels_250.jsonl \
-    --output_dir results/intervention_kimi-k2-thinking
-
+# Qwen3-235B and Kimi-K2 are served with vLLM on 8 GPUs, e.g.
 vllm serve moonshotai/Kimi-K2-Thinking --tensor-parallel-size 8 --max-model-len 16384 --trust-remote-code
-MODEL=moonshotai/Kimi-K2-Thinking DIR=results/intervention_kimi-k2-thinking bash run_intervention_api.sh
+MODEL=moonshotai/Kimi-K2-Thinking DIR=results/intervention/kimi-k2-thinking bash intervention/run_vllm.sh
 ```
 
-**Pre-computed** labels, edits, and inference results are already in `results/intervention_labels_250.jsonl` and `results/intervention/` (Qwen3-Next-80B), `results/intervention_qwen3-235b-a22b-thinking/`, and `results/intervention_kimi-k2-thinking/`.
+Step 3 needs `uv sync --extra gpu`. The strategies are `fd` (remove the final decision), `fd_branch_comp` (also
+remove the chosen branch), `bc_minus_d0only` (add back its depth-1 paragraphs) and `bc_minus_d0_and_deep1plus`
+(also add back depth-2 paragraphs). Each `_ctrl` variant applies the same edit to the largest unchosen branch.
 
-## Analysis Notebooks
+### Validation of the LLM judges (Appendix C.3, C.5.2)
 
-All figures in the paper can be reproduced by running the analysis notebooks. No fitting step is required — pre-computed results are included.
-
-| Notebook | Figure | Description |
-|----------|--------|-------------|
-| `analysis_tree_search_effort.ipynb` | Fig. 1 | Tree size vs. win rate across 27 models |
-| `analysis_myopic_vs_fulltree.ipynb` | Fig. 2 | Myopic vs. full-tree prediction accuracy |
-| `analysis_feature_weights.ipynb` | Fig. 3 | Fitted feature weights vs. model win rate |
-| `analysis_fit_result_comparison.ipynb` | Fig. S1 | NLL comparison across all four variants |
-| `analysis_model_recovery.ipynb` | Fig. S2 | Model recovery results for 13 open-source models |
-| `analysis_intervention.ipynb` | Fig. 4 | Causal intervention: which trace segments drive moves (all three models in the last section) |
-
-## Board Representation
-
-The game is played on a 4×9 board. Board states are encoded in FEN notation (inspired by chess): rows separated by `/`, pieces denoted `W`/`B`, digits represent consecutive empty squares. Internally, boards are 4×9 NumPy arrays with `+1` = current player, `-1` = opponent, `0` = empty.
-
-Features are computed over *viable windows* — contiguous 4-square windows (horizontal, vertical, or diagonal) that are not blocked by an opponent piece.
+```bash
+python validation/tree_extraction/score.py
+python validation/paragraph_labels/score.py
+```
 
 ## Citation
 
-If you use this code or data, please cite our paper (citation to be added upon publication).
+```bibtex
+@inproceedings{chen2026extracting,
+  title     = {Extracting Search Trees from {LLM} Reasoning Traces Reveals Myopic Planning},
+  author    = {Chen, Sixing and Li, Ji-An and Cakir, Saner and Akcali, Sinan and Lee, Kayla and Mattar, Marcelo G.},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2026}
+}
+```

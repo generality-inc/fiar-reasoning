@@ -1,0 +1,110 @@
+You are given a natural-language reasoning trace about a 4×9 Four-in-a-Row (Connect-X-like) game. Your task is to reconstruct exactly the explicitly considered move trees and output strict JSON in a prescribed nested array format.
+
+Domain and board facts (authoritative; use as-is, do not infer/alter):
+- Board: 4 rows × 9 columns, zero-based. Rows 0–3 (top to bottom), columns 0–8 (left to right).
+- No gravity: a move may be played in any empty cell. Ignore any “falling piece” assumptions.
+- Win: four in a row horizontally, vertically, or diagonally (both down-right and down-left).
+- Vertical four is exactly a whole column (rows 0–3 in that column).
+- Diagonals of length 4 are exactly:
+  - Down-right (top-left → bottom-right): start only at row 0, columns 0–5. Each is (0,c),(1,c+1),(2,c+2),(3,c+3).
+  - Down-left (top-right → bottom-left): start only at row 0, columns 3–8. Each is (0,c),(1,c-1),(2,c-2),(3,c-3).
+
+Accepted coordinate inputs and normalization:
+- Accept these explicit coordinate forms:
+  - “(r,c)”
+  - “row r col c”
+  - “m r c” (move notation; treat exactly as r,c)
+- Accept explicit enumerations and expand to individual coordinates:
+  - “row 2 cols 6,7,8” → add "2,6", "2,7", "2,8"
+  - “column 5 rows 0,1,3” → add "0,5", "1,5", "3,5"
+  - “row 1 col 2” (ingle), “row 1 col 1 or col 0” → add "1,1" and "1,0"
+- Normalize every coordinate to the exact string "r,c" (no spaces).
+- Unambiguous-only: Ignore vague phrases (e.g., “left side”, “near the center”, “the other end”) unless the exact endpoint squares were enumerated earlier in that same branch context.
+\snRequired output format (strict JSON):
+- Produce exactly: {"trees": Node[]}
+- Node := ["r,c", Node, Node, ...]
+  - First element is the move coordinate string "r,c".
+  - Following elements (if any) are child Node values.
+- A leaf node is just ["r,c"].
+- Strict JSON only:
+  - Use double quotes for all strings.
+  - No comments, no trailing commas, no extra fields.
+  - Do not wrap your final JSON in Markdown/code fences.
+
+Tree semantics and strict alternation:
+- Each root node is a model-side first move explicitly considered in the trace.
+- Depth alternates by side:
+  - Depth 0 (root): model move
+  - Depth 1: opponent reply
+  - Depth 2: model reply
+  - Depth 3: opponent reply
+  - … and so on. Maintain alternation at every depth.
+- Children under any node are exactly the explicitly described replies for that exact position/branch.
+
+How to extract moves from the trace (precise, comprehensive):
+
+1) Identify model-side root moves (first-move candidates only)
+- Create a separate root node for every distinct coordinate the trace explicitly considers as the model’s first move.
+- Treat as model-first-move candidates when phrased as:
+  - “If I play (r,c)…”, “I can/could/should play (r,c)…”, “What if I play (r,c)…”
+  - “Another idea: (r,c)…”, “The best move is (r,c)…” (final chosen move still counts as a root)
+  - Enumerations: “I could play (a,b) or (c,d)” → add both as separate roots.
+  - Series: “I could fill (2,1),(2,2),(2,3)…” → add each as a separate root.
+  - “m r c” used to propose the model’s move choice → add as a root.
+- Include every distinct explicitly proposed model-first-move, even if later rejected or deemed inferior. Do not drop quick tests or briefly examined options.
+- Do NOT promote coordinates to roots if they appear only as opponent moves or only as deeper replies (unless the trace also proposes them as a model-first move elsewhere).
+
+2) Build subtrees per root (no cross-pollination across roots)
+- Under a specific root, attach opponent replies tied to that exact root scenario. Use phrasing such as: “then they can…”, “the opponent can reply at …”, “they must block at …”, “they’ll answer with …”, “they can try …”, “they target …”.
+- Include opponent move enumerations tied to that root, in the order explicitly mentioned:
+  - Column/row enumerations: e.g., “Their vertical in column 5 needs rows 0,1,3” → add "0,5","1,5","3,5".
+  - Horizontal targets: “After (0,3), they threaten row 2 cols 6,7,8” → add "2,6","2,7","2,8".
+  - Diagonal endpoints: If a diagonal is described or implied by endpoints (e.g., “(0,3)-(1,4)-(2,5)-(3,6)” or “they could play (0,3) or (3,6)”), add each explicitly named endpoint as an opponent child.
+- For each opponent child, attach exactly the model’s explicitly stated reply(ies) for that branch, maintaining alternation. If multiple model replies are given (“I must play (2,2) or (2,6)”), add both as children under that opponent node.
+- Continue deeper when the trace specifies the next opponent move after the model reply (e.g., “after I block at (2,2), they win by the other end (2,6)”), adding that opponent move as the next child node at the correct depth.
+- Only include moves explicitly tied to the current root context. Do NOT transfer opponent replies or deeper sequences from one root to another unless the trace explicitly restates them for that other root.
+
+3) Mirroring, “if instead/similarly”, and “the other end” within the same root
+- If the trace presents mirrored alternatives (“or instead at (c,d)”, “similarly at (x,y)”), include each as a sibling child under the same parent, in order of mention.
+- “The other end” is allowed only if both endpoints of the line were explicitly established earlier in that branch. Add the mirrored endpoint if explicitly identified or implied by previously listed endpoints of that same line.
+- When both ends of a horizontal or diagonal threat are explicitly named, include both as children.
+
+4) Context tracking and deeper sequences
+- Maintain the exact branch context as described. When the trace walks through a sequence (“If I play (0,1), they must play (3,4); then I play (0,5); then they must block (3,2); then I can play (2,5) …”), build the path depth-by-depth under the same root with strict alternation.
+- If the narrative continues with “after that”, “then”, “from there”, or refers back to a previously described branch (without switching to a new root), continue that exact subtree.
+- Do not assume or create branches not explicitly stated.
+
+5) Unambiguous-only policy
+- Include only coordinates that are explicitly specified (via accepted formats or explicit enumerations).
+- Ignore vague references (“block there”, “left side”, “near (r,c)”) unless the exact squares were enumerated earlier in that same branch.
+
+6) De-duplication and ordering
+- Within the same parent, include each child coordinate at most once.
+- If a node reappears later under the same parent, merge newly stated children into that existing node (preserve alternation).
+- Preserve the order of children exactly as they are mentioned in the trace.
+
+7) Interpreting “m r c” notation
+- Treat “m r c” exactly as the explicit coordinate (r,c) and normalize to "r,c".
+- Add it as a root only if used to propose the model’s first move (including the final chosen move).
+- When “m r c” appears as an opponent reply in-branch, add it at the appropriate depth under the correct parent.
+
+Generalizable extraction strategy (to avoid common mistakes seen in prior attempts):
+- Be exhaustive in capturing roots: every time the narrator explicitly proposes a candidate for “my first move” (including quick tests, alternatives, and series), create a root for that coordinate. Do not skip less-preferred or rejected first-move candidates.
+- Under each root, be exhaustive in capturing opponent replies explicitly tied to that root, including:
+  - All row/column enumerations, expanded to individual squares.
+  - Both explicitly named endpoints of diagonals/horizontals.
+  - Any “they could play/try/need/must” squares enumerated as part of threats on that branch.
+- Keep branches separate by root; do not mix children across roots.
+- Maintain strict side alternation at all depths.
+- Do not invent nodes; only add squares explicitly named or enumerated under the current branch context.
+- Do not promote opponent-only or deeper-branch-only squares to roots unless they were also explicitly presented as model-first-move options elsewhere in the trace.
+
+Final validation checklist before output:
+- Top-level object is exactly {"trees": [...]} with Node[] content.
+- Every node is ["r,c", ...children...] with coordinates normalized to "r,c" (no spaces).
+- Root nodes include every distinct explicit model-first-move candidate from the trace (including all enumerated candidates and quick tests), in order of first mention.
+- Under each root, all explicitly stated opponent replies for that root are present (including all expanded row/column enumerations and diagonal/horizontal endpoints), in order of first mention.
+- Under each opponent node, all explicitly stated model replies are present; include deeper opponent follow-ups when specified.
+- No duplicates at the same parent; merge re-mentioned nodes’ children; preserve mention order.
+- Strict alternation by depth is preserved everywhere.
+- Strict JSON only; use double quotes; no trailing commas; no extra fields; do not wrap in Markdown.
