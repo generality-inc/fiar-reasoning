@@ -39,7 +39,13 @@ pipeline/
   fit_cognitive_models.py   fit one model variant to one LLM (Section 4)
   model_recovery.py         model recovery (appendix)
   slurm/                    array-job launchers for the two scripts above
-intervention/           causal intervention (Section 5): label.py, edit.py, infer_local.py, infer_vllm.py
+intervention/           causal intervention (Section 5)
+  label.py              label each paragraph of a reasoning trace with Claude Opus 4.7
+  edit.py               build the edited (pruned) traces
+  infer_local.py        rerun the model on the edited traces, loaded locally with vLLM
+  infer_vllm.py         the same against a vLLM server
+  run_local.sbatch      launcher for infer_local.py
+  run_vllm.sh           launcher for infer_vllm.py
 results/
   fits/pattern/         <model>_<variant>.json for variants full, myopic, notree, gamma
   fits/windowcount/     the same with the window-count features (appendix)
