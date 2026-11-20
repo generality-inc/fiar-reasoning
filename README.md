@@ -7,25 +7,45 @@ LLMs played a round-robin four-in-a-row tournament (27 models, 1404 games). We e
 reasoning trace with an LLM judge, fit cognitive models that predict each move from its tree, and prune reasoning
 traces to test which parts of the search causally drive the move.
 
-## Setup
+## Quick start
 
 ```bash
 uv sync                    # Python 3.11 environment with the `fiar` package and all dependencies
 brew install graphviz      # or see https://graphviz.org/download/ (needed for Figure 1D)
-```
-
-All commands below are run from the repository root (prefix them with `uv run` or activate `.venv`).
-
-## Reproducing the figures
-
-Everything needed for the figures is in this repository: the per-turn dataframe `data/game_trees.pkl` and the
-precomputed results in `results/`. Run
-
-```bash
 jupyter nbconvert --to notebook --execute paper_figures.ipynb   # or open it and run all cells
 ```
 
-`paper_figures.ipynb` writes every data panel to `figures/` and prints the statistics quoted in the text.
+`paper_figures.ipynb` writes every data panel to `figures/` and prints the statistics quoted in the text. It needs
+only what is already in this repository: the per-turn dataframe `data/game_trees.pkl` and the precomputed results
+in `results/`.
+
+All commands in this README are run from the repository root (prefix them with `uv run` or activate `.venv`).
+
+## Repository layout
+
+```
+paper_figures.ipynb     all figures and in-text statistics
+data/game_trees.pkl     one row per turn, with the extracted search tree
+fiar/                   Python package
+  board.py              FEN and search-tree parsing
+  features.py           heuristic value functions (pattern and window-count features)
+  minimax.py            value backup over a tree (full-tree, myopic, discount)
+  fit.py                datasets, likelihood, fitting, model variants
+  models.py             model names
+  render.py             search-tree rendering (Figure 1D)
+pipeline/
+  extract_search_trees.py   GPT-5 tree extraction and dataframe assembly (Section 2)
+  prompts/                  the extraction prompt
+  fit_cognitive_models.py   fit one model variant to one LLM (Section 4)
+  model_recovery.py         model recovery (appendix)
+  slurm/                    array-job launchers for the two scripts above
+intervention/           causal intervention (Section 5): label.py, edit.py, infer_local.py, infer_vllm.py
+results/
+  fits/pattern/         <model>_<variant>.json for variants full, myopic, notree, gamma
+  fits/windowcount/     the same with the window-count features (appendix)
+  recovery/             <model>.json (appendix)
+  intervention/<model>/ labels.jsonl, edits_<strategy>.jsonl, results_<strategy>.csv
+```
 
 ## Data
 
@@ -55,94 +75,40 @@ traces and outcome), `game.log`, and one `<provider>-<model>(<player>)-log.jsonl
 requests and responses. The dataset also contains `four_in_a_row-standard/`, a tournament with a different board
 notation that is not analysed in the paper.
 
-## Repository layout
-
-```
-fiar/                   Python package
-  board.py              FEN and search-tree parsing
-  features.py           heuristic value functions: pattern features (main text) and window-count features (D.4)
-  minimax.py            value backup over a tree (full-tree, myopic, discount)
-  fit.py                datasets, likelihood, fitting, model variants
-  models.py             model names
-  render.py             search-tree rendering (Figure 1D)
-pipeline/
-  extract_search_trees.py   GPT-5 tree extraction and dataframe assembly (Section 2, C.2)
-  prompts/                  the extraction prompt (Appendix C.2)
-  fit_cognitive_models.py   fit one model variant to one LLM (Section 4, D.4)
-  model_recovery.py         model recovery (D.2)
-  slurm/                    array-job launchers for the two scripts above
-intervention/           causal intervention (Section 5, C.5): label.py, edit.py, infer_local.py, infer_vllm.py
-validation/
-  tree_extraction/      judge vs human search trees (C.3)
-  paragraph_labels/     paragraph labeler vs human labels (C.5.2)
-results/
-  fits/pattern/         <model>_<variant>.json for variants full, myopic, notree, gamma
-  fits/windowcount/     the same with the window-count features (D.4)
-  recovery/             <model>.json
-  intervention/<model>/ labels.jsonl, edits_<strategy>.jsonl, results_<strategy>.csv
-paper_figures.ipynb     all figures and in-text statistics
-```
-
 ## Rerunning the analyses
 
-### Search-tree extraction (Section 2.2)
+The three main analyses can be rerun from the raw logs. The appendix analyses (model recovery, window-count
+features) are not covered here; their usage is in the docstrings of the scripts in `pipeline/`.
+
+**Search-tree extraction (Section 2).** Needs `OPENAI_API_KEY`. The judge samples at temperature 1, so a rerun
+gives similar but not identical trees.
 
 ```bash
-python pipeline/extract_search_trees.py submit    # needs OPENAI_API_KEY
+python pipeline/extract_search_trees.py submit
 python pipeline/extract_search_trees.py fetch     # repeat until all responses are completed
 python pipeline/extract_search_trees.py build     # -> data/game_trees_rebuilt.pkl
 ```
 
-The judge samples at temperature 1, so a rerun gives similar but not identical trees. Applied to the original judge
-outputs, `build` reproduces every column of `data/game_trees.pkl` that the analyses use (`trees_annotated` is not
-rebuilt).
-
-### Cognitive models (Section 4, Appendix D.4)
+**Cognitive models (Section 4).** Variants are `full`, `myopic`, `notree` and `gamma` (discount).
 
 ```bash
-python pipeline/fit_cognitive_models.py --model deepseek-r1 --variant myopic
-VARIANT=myopic sbatch pipeline/slurm/fit.sbatch          # all 13 fitted models
-VARIANT=gamma BASIS=windowcount sbatch pipeline/slurm/fit.sbatch
+python pipeline/fit_cognitive_models.py --model deepseek-r1 --variant myopic   # one LLM
+VARIANT=myopic sbatch pipeline/slurm/fit.sbatch                                # all 13 fitted LLMs
 ```
 
-Variants are `full`, `myopic`, `notree` and `gamma` (discount). Each fit uses L-BFGS-B with 20 random starts. With
-the window-count basis, C is fixed to 1 and the discount fit is also started from the myopic solution, so run the
-`myopic` fits first.
-
-### Model recovery (Appendix D.2)
-
-```bash
-sbatch pipeline/slurm/recovery.sbatch     # needs results/fits/pattern/<model>_{full,myopic}.json
-```
-
-### Causal intervention (Section 5)
-
-The intervention was run on Qwen3-Next-80B-A3B-Thinking, Qwen3-235B-A22B-Thinking-2507 and Kimi-K2-Thinking, on
-the first 250 eligible turns of each. Each step reads and writes `results/intervention/<model>/`.
+**Causal intervention (Section 5).** Run on Qwen3-Next-80B-A3B-Thinking, Qwen3-235B-A22B-Thinking-2507 and
+Kimi-K2-Thinking. Each step reads and writes `results/intervention/<model>/`; step 3 needs `uv sync --extra gpu`.
 
 ```bash
 # 1. Label paragraphs with Claude Opus 4.7 (needs ANTHROPIC_API_KEY)
 python intervention/label.py --model_name qwen3-next-80b-a3b-thinking
-# 2. Build the seven edited traces
+# 2. Build the edited traces
 python intervention/edit.py --model qwen3-next-80b-a3b-thinking
 # 3. Rerun the model on the edited traces
 MODEL_DIR=/path/to/Qwen3-Next-80B-A3B-Thinking sbatch intervention/run_local.sbatch
-
-# Qwen3-235B and Kimi-K2 are served with vLLM on 8 GPUs, e.g.
-vllm serve moonshotai/Kimi-K2-Thinking --tensor-parallel-size 8 --max-model-len 16384 --trust-remote-code
-MODEL=moonshotai/Kimi-K2-Thinking DIR=results/intervention/kimi-k2-thinking bash intervention/run_vllm.sh
 ```
 
-Step 3 needs `uv sync --extra gpu`. The strategies are `fd` (remove the final decision), `fd_branch_comp` (also
-remove the chosen branch), `bc_minus_d0only` (add back its depth-1 paragraphs) and `bc_minus_d0_and_deep1plus`
-(also add back depth-2 paragraphs). Each `_ctrl` variant applies the same edit to the largest unchosen branch.
-
-### Validation of the LLM judges (Appendix C.3, C.5.2)
-
-```bash
-python validation/tree_extraction/score.py
-python validation/paragraph_labels/score.py
-```
+The two larger models are served with vLLM instead; see the header of `intervention/run_vllm.sh`.
 
 ## Citation
 
